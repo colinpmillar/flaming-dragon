@@ -6,6 +6,11 @@ library(numDeriv)
 library(nlstools)
 library(scam)
 library(xtable)
+library(mgcv)
+library(splines)
+
+
+path.to.file <- "fig/"
 
 source('R/functions.R')
   
@@ -357,8 +362,8 @@ for (c in 1:2){
 if(c==1){xlim = range(b.cm.pred$stock.size)}  
 if(c==2){xlim = range(b.cm.predo$stock.size)}
 
-file.name <- paste(path.to.file,'fit',c,'.png', sep = "") 
-png(file=file.name,width=3,height=3,units='in',res=1200) 
+file.name <- paste(path.to.file,'fit',c,'.pdf', sep = "") 
+pdf(file=file.name,width=3,height=3,units='in',res=1200) 
 par(mfrow=c(2,1),oma=c(3,1,0.5,0),mar=c(0.5,3,0,1),las=0,cex=0.85)
 
 ylim1 = c(0,max(b.cm.pred$UCI.rec,b.cm.pred$UCI.rec4,BH.pred.rec,RK.pred.rec,y))
@@ -412,6 +417,8 @@ dev.off()
 
 #### compare smoothers with different df's #####
 
+pdf('fig/sp_compare.pdf')
+
 ind = order(dat$stock.size)
 
 b.cm.comp = data.frame(stock.size = dat$stock.size[ind],
@@ -450,12 +457,12 @@ legend("topright",lty=1,lwd=2,c('GCV','df=3','df=4'),bty='n',col=c('black','brow
 mtext(side=2,line=3,outer=FALSE,r.name)     
 mtext(side=1,line=2.2,outer=FALSE,s.name)
 
-file.name <- paste(path.to.file,'sp_compare', sep = "")
-savePlot(filename = file.name,type = "wmf", device = dev.cur(),restoreConsole = TRUE)
 dev.off()
 
 
 #### compare smoothers with different df's #####
+
+pdf('fig/sp_compare.pdf')
 
 ind = order(dat$stock.size)
 
@@ -495,11 +502,11 @@ legend("right",lty=1,lwd=2,c('GCV','df=3','df=4'),bty='n',col=c('black','brown',
 mtext(side=2,line=3,outer=FALSE,r.name)     
 mtext(side=1,line=2.2,outer=FALSE,s.name)
 
-file.name <- paste(path.to.file,'sp_compare', sep = "")
-savePlot(filename = file.name,type = "wmf", device = dev.cur(),restoreConsole = TRUE)
 dev.off()
 
 ##### Residuals Plots #####
+
+pdf("fig/resid.pdf")
 
 resid.matrix = matrix(NA,n,4)
 smooth.resid.matrix = resid.matrix
@@ -536,9 +543,6 @@ c('CM','HS','BH','RK'),bty='n')
        
 mtext(side=2,line=3,"Standardized residual pattern")
 mtext(side=1,line=2.5,s.name)
-
-file.name <- paste(path.to.file,'resid', sep = "")
-savePlot(filename = file.name,type = "wmf", device = dev.cur(),restoreConsole = TRUE)
 
 dev.off()
 
@@ -625,6 +629,8 @@ for(i in 1:nFv){
     
 }
 
+pdf('fig/yield1.pdf')
+
 par(mar=c(5,5,0.5,0.5))
 ylim = range(CM.equil[,3],CM3.equil[,3],CM4.equil[,3],na.rm=T)
 plot(Fv,CM.equil[,3],ylim=ylim,lwd=2,col='black',type='l',xlab='Fishing mortality',ylab='Yield (Kt)',las=1)
@@ -633,13 +639,9 @@ lines(Fv,CM4.equil[,3],lwd=2,lty=1,col='purple')
 legend("bottom",lty=1,col=c('black','brown','purple'),lwd=2,
 c('GCV','df=3','df=4'),bty='n')
 
-file.name <- paste(path.to.file,'yield1', sep = "")
-savePlot(filename = file.name,type = "wmf", device = dev.cur(),restoreConsole = TRUE)
-
 dev.off()
 
-file.name <- paste(path.to.file,'yield.png', sep = "")
-png(file=file.name,width=2.5,height=2.5,units='in',res=1200) 
+pdf("fig/yield.pdf") 
 par(mar=c(3.5,3.5,0.5,0.5),las=0,cex=0.85)
 
 ylim = range(BH.equil[,3],RK.equil[,3],HS.equil[,3],CM.equil[,3],CM4.equil[,3],na.rm=T)
@@ -802,3 +804,4 @@ print(xtable(fit.tab,digits=c(7,3,1,3),caption=ctext,
 save.image('save.RData')
 
 ########################################################
+
