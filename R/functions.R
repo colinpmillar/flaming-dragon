@@ -29,7 +29,7 @@ RK <- function(parm,s){
   return(exp(ksi))
 }
 
-RK.ll <- function(parm){
+RK.ll <- function(parm) {
   s<-x
   ly <- log(y)
   res=sum(wt.ext*((ly-log(RK(parm,s)))^2))
@@ -118,44 +118,49 @@ mixBH.gam <- function(parm){
 
 ## MSY Stuff;
 
-equil.res <- function(f,alpha.p,beta.p,Saop,S50p,Rmaxp){
-    fp = f*pr
+equil.res <- function(f, alpha.p, beta.p, Saop, S50p, Rmaxp, sr_type) {
+    fp = f * pr
     zp = mp + fp
-    czp = cumsum(c(0,zp[1:(n.age-1)]))
+    czp = cumsum( c(0, zp[1:(n.age-1)]))
 
-    YPR = sum(exp(-czp)*catch.weight*fp*(1-exp(-zp))/zp)
-    if(!mid.year){BPR = sum(exp(-czp)*stock.weight**matp)}
-    if(mid.year){BPR = sum(exp(-czp - zp/2)*stock.weight*matp)}; ## midyear SSB per recruit;
+    YPR = sum(exp(-czp) * catch.weight * fp * (1 - exp(-zp)) / zp)
+#    if(!mid.year) {
+      BPR = sum(exp(-czp)*stock.weight**matp)
+#    } else {
+#      BPR = sum(exp(-czp - zp/2)*stock.weight*matp)} ## midyear SSB per recruit
+#    }
     BPRi = 1/BPR
-    if(sr_type=='BH'){B.equil = S50p*(Saop*BPR - 1)};
-    if(sr_type=='RK'){B.equil = (log(alpha.p) + log(BPR))/beta.p};
-    if(sr_type=='HS'){
-      B.equil=0;
-      if(BPRi < Saop){B.equil = Rmaxp/BPRi};
+    if(sr_type == 'BH') {B.equil = S50p * (Saop * BPR - 1)}
+    if(sr_type == 'RK') {B.equil = (log(alpha.p) + log(BPR)) / beta.p}
+    if(sr_type == 'HS') {
+      B.equil = 0
+      if (BPRi < Saop) {B.equil = Rmaxp/BPRi}
     }
-    B.equil = max(0,B.equil)
-    R.equil = B.equil/BPR
-    Y.equil = R.equil*YPR
-  c(R.equil,B.equil,Y.equil)}
+    B.equil = max(0, B.equil)
+    R.equil = B.equil / BPR
+    Y.equil = R.equil * YPR
 
-equil.yield <- function(f,alpha.p,beta.p,Saop,S50p,Rmaxp)
-  {-equil.res(f,alpha.p,beta.p,Saop,S50p,Rmaxp)[3]}
-
-fS50 <- function(sp,hmax.rec,rparm){
-  return((hmax.rec - RK(rparm,sp))^2)
+  c(R.equil, B.equil, Y.equil)
 }
 
-make.RP <- function(parm,Fstart,iter.max=200){
-  
+equil.yield <- function(f, alpha.p, beta.p, Saop, S50p, Rmaxp, sr_type) {
+  -equil.res(f, alpha.p, beta.p, Saop, S50p, Rmaxp, sr_type)[3]
+}
+
+fS50 <- function(sp,hmax.rec,rparm){
+  (hmax.rec - RK(rparm,sp))^2
+}
+
+make.RP <- function(parm, Fstart, iter.max = 200, sr_type){
   alpha.p = exp(parm[1])
   beta.p = exp(parm[2])
-  upper=4
-  if(sr_type=='BH'){
+  upper = 4
+  if(sr_type == 'BH'){
     S50p = exp(parm[2])
     Saop = exp(parm[1]-parm[2])
     Rmaxp = exp(parm[1])
   }
-  if(sr_type=='RK'){
+  if(sr_type == 'RK'){
    Saop = exp(parm[1])
    Rmaxp = alpha.p/(beta.p*exp(1))
    hmax.rec = Rmaxp/2
@@ -164,21 +169,23 @@ make.RP <- function(parm,Fstart,iter.max=200){
    temp1 = nlminb(ts50,fS50,hmax.rec=hmax.rec,rparm=rparm)
    S50p = temp1$par
   }
-  if(sr_type=='HS'){
+  if(sr_type == 'HS'){
     S50p = beta.p/2
     Saop = 2*alpha.p
     Rmaxp = alpha.p*(beta.p + sqrt(beta.p**2 + gam2by4))
     fv = seq(0.2,2,by=0.001)
     mfv = matrix(fv,ncol=1)
     yc = apply(mfv,1,equil.yield,
-         alpha.p=alpha.p,beta.p=beta.p,Saop=Saop,S50p=S50p,Rmaxp=Rmaxp);
+         alpha.p=alpha.p,beta.p=beta.p,Saop=Saop,S50p=S50p,Rmaxp=Rmaxp, sr_type=sr_type);
     pos = which.min(yc)
     if(iter.max==0){upper = 4}
     if(iter.max>0){upper = mfv[pos,1]}
   }
   #temp = nlminb(Fstart,equil.yield, control = list(trace=1))
-  temp = nlminb(Fstart,equil.yield,control=list(iter.max=iter.max),upper=upper,
-         alpha.p=alpha.p,beta.p=beta.p,Saop=Saop,S50p=S50p,Rmaxp=Rmaxp)
-  temp1 = equil.res(temp$par,alpha.p,beta.p,Saop,S50p,Rmaxp)
+  temp = nlminb(Fstart, equil.yield, control = list(iter.max = iter.max), upper = upper,
+         alpha.p = alpha.p, beta.p = beta.p, Saop = Saop, S50p = S50p, Rmaxp = Rmaxp, sr_type = sr_type)
+  temp1 = equil.res(temp$par, alpha.p, beta.p, Saop, S50p, Rmaxp, sr_type)
   c(S50p,Saop,temp$par,temp1[2:3])
 }
+
+

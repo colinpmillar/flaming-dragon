@@ -1,14 +1,12 @@
-#source("C:\\home\\CADIGAN\\stocks\\SR\\nonparam\\NE_arctic_cod\\fit.R")
 
-directory<- c("C:\\home\\CADIGAN\\stocks\\SR\\nonparam\\NE_arctic_cod\\")
-setwd(directory)
 
-path.to.file<- directory
+library(colorout)
+library(numDeriv)
+library(scam)
+library(xtable)
 
-source('C://home//CADIGAN//stocks//SR//Rfunc.txt')
-require("numDeriv")
-require("scam")
-require("xtable")
+source("functions.R")
+
 
 load('C:\\home\\CADIGAN\\stocks\\SR\\ICEs data ver2\\sr.RData')    
 
