@@ -179,53 +179,53 @@ dev.off()
 
 ##### Get RK MSY stuff  #######;
 
-sr_type='RK'
+
 RK.parmi = c(RK.parm[1]*(exp(1)*exp(RK.parm[2])),exp(RK.parm[2]))
-rk.ref.points = make.RP(log(RK.parmi),0.2)
+rk.ref.points = make.RP(log(RK.parmi), 0.2, sr_type = 'RK')
 RK.Bmsy = rk.ref.points[4]
 
-RK.boo$coefbooti=RK.boo$coefboot
-RK.boo$coefbooti[,2]=exp(RK.boo$coefbooti[,2])
-RK.boo$coefbooti[,1] = RK.boo$coefboot[,1]*(exp(1)*RK.boo$coefbooti[,2])
-RK.boo.RP = apply(log(RK.boo$coefbooti),1,make.RP,Fstart=0.1);
+RK.boo$coefbooti = RK.boo$coefboot
+RK.boo$coefbooti[,2] = exp(RK.boo$coefbooti[,2])
+RK.boo$coefbooti[,1] = RK.boo$coefboot[,1] * (exp(1) * RK.boo$coefbooti[,2])
+
+RK.boo.RP = apply(log(RK.boo$coefbooti),1,make.RP, Fstart=0.1, sr_type = 'RK');
 RK.boo.qRP = apply(RK.boo.RP,1,quantile,probs=c(0.025,0.25,0.5,0.75,0.975))
 
 ####  shape constrained Spline fits #########
     
-rng = diff(range(x))/n
-ssb.pred.points1 = c(seq(0.1,min(x),by=rng/4),seq(min(x),ssb.max,by=rng))
+rng = diff(range(x)) / n
+ssb.pred.points1 = c(seq(0.1, min(x), by = rng/4), seq(min(x), ssb.max, by=rng))
     
 np = length(ssb.pred.points1)
-dat = data.frame(stock.size=c(x,ssb.pred.points1),recruit=c(y,rep(1,np)),
-                 wt=c(wt.ext,rep(0,np)))
-dat$log.recruit=log(dat$recruit)
-dat$offset = log(dat$stock.size)
+dat = data.frame(stock.size = c(x,ssb.pred.points1), recruit = c(y,rep(1,np)), wt=c(wt.ext,rep(0,np)))
+dat $ log.recruit = log(dat$recruit)
+dat $ offset = log(dat$stock.size)
 
 ## Need this code to constrain prod at low stock size;
-dat1=dat
+dat1 = dat
 pos = which.min(dat1$stock.size)
-dat1$recruit[pos] = Pmax*dat1$stock.size[pos]
-dat1$log.recruit[pos]=log(dat1$recruit[pos])  
-dat1$wt[pos]=10000
+dat1 $ recruit[pos] = Pmax*dat1$stock.size[pos]
+dat1 $ log.recruit[pos] = log(dat1$recruit[pos])  
+dat1 $ wt[pos] = 10000
 
-dato=dat
+dato = dat
 
 dat.nz = subset(dat,wt==1)
 
 ## Nonparametric compensatory mortality SR model;
 
 m = length(dat$stock.size)
-nknots=20
+nknots = 20
 
-mygcv <- function(rho){
-temp <- scam(log.recruit ~ s(stock.size,k=nknots,bs="mpd",m=2) + offset(offset),
-        family=gaussian(link="identity"),data=dat,optimizer="nlm",
-        weights=dat$wt,sp=exp(rho))
-tgcv = n*temp$dev/((n - sum(temp$edf))**2)                           
-return(c(tgcv))
+mygcv <- function(rho) 
+{
+  temp <- scam(log.recruit ~ s(stock.size,k=nknots,bs="mpd",m=2) + offset(offset),
+          family=gaussian(link="identity"),data=dat,optimizer="nlm",
+          weights=dat$wt,sp=exp(rho))
+  c(n * temp $ dev / (n - sum(temp $ edf))^2 )
 }
 
-gcv.fit = optim(-7,mygcv,upper=5,lower=-8,method="L-BFGS-B")
+gcv.fit = optim(-7, mygcv, upper=5, lower=-8, method="L-BFGS-B")
 
 b.cm <- scam(log.recruit ~ s(stock.size,k=nknots,bs="mpd",m=2) + offset(offset),
         family=gaussian(link="identity"),data=dat,optimizer="nlm",
