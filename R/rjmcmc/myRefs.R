@@ -14,8 +14,6 @@ library(FLCore)
 source("SimulateRefPts.R")
 source("myMH.R")
 
-# remove recruits at v high biomass
-
 ############### Read in stock assess information prepared as FLR stock objects.
 load("ewg1219.RData")
 

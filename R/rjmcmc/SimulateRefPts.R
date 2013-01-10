@@ -1,11 +1,16 @@
 
 
 
+
+
+
 fitModels <- function(stk, delta = 1.3, Nburn = 10000)
 {
 
+  # this is only FLR bits!
   data <- data.frame(ssb = c(ssb(stk))[-dim(stock.n(stk))[2]],
                    rec = c(rec(stk))[-1])
+  stkname <- name(stk)
 
   # remove any NAs
   data <- data[apply(data, 1, function(x) all(!is.na(x))), ]
@@ -37,7 +42,7 @@ fitModels <- function(stk, delta = 1.3, Nburn = 10000)
          RRK = t(sapply(1:nrow(HS), function(i) RKr(RK[i,], sort(data $ ssb)))),
          RBH = t(sapply(1:nrow(HS), function(i) BHr(BH[i,], sort(data $ ssb)))),
          Blim = median(HS $ b), PBlim = hist(HS $ b, 30, plot=FALSE),
-         Stknam = name(stk))
+         Stknam = stkname)
 
 
 #########################################################
@@ -65,6 +70,76 @@ EqSim <- function(fit, Nrun = 200, # number of years to run in total
 }
 
 
+
+
+fitModels2 <- function(stk, delta = 1.3, Nburn = 10000)
+{
+
+  # this is only FLR bits!
+  data <- data.frame(ssb = c(ssb(stk))[-dim(stock.n(stk))[2]],
+                   rec = c(rec(stk))[-1])
+  stkname <- name(stk)
+
+  # remove any NAs
+  data <- data[apply(data, 1, function(x) all(!is.na(x))), ]
+
+
+#########################################################
+# Fit models
+#######################################################
+
+  # fit stock recruit relationships using Metropolis hasings MCMC algorithm
+  RK <- BHMH(Nburn + 5000, 5000, data, delta = delta, model = "ricker")
+  BH <- BHMH(Nburn + 5000, 5000, data, delta = delta, model = "bevholt")
+  HS <- BHMH(Nburn + 5000, 5000, data, delta = delta, model = "segreg")
+
+  # transform to johns parameterisations
+  BH $ b <- 1/BH $ b
+  BH $ a <- BH $ a * BH $ b
+
+  a <- HS $ b
+  HS $ b <- 1/(HS $ a * HS $ b)
+  HS $ a <- a
+
+#########################################################
+# get posterior distribution of estimated recruitment
+#######################################################
+  res <- 
+   list(llHS = HS $ llik, llRK = RK $ llik, llBH = BH $ llik, 
+         RHS = t(sapply(1:nrow(HS), function(i) HSr(HS[i,], sort(data $ ssb)))),
+         RRK = t(sapply(1:nrow(HS), function(i) RKr(RK[i,], sort(data $ ssb)))),
+         RBH = t(sapply(1:nrow(HS), function(i) BHr(BH[i,], sort(data $ ssb)))),
+         Blim = median(HS $ b), PBlim = hist(HS $ b, 30, plot=FALSE),
+         Stknam = stkname)
+
+
+#########################################################
+# make stock recruit object with correct probabilities of each model
+#######################################################
+
+# well in our case llik is actually lpost... so we can do acceptance probablilities for
+# each simulation
+
+  SR <- SRobject(getProb(res, 1000), 
+                 HS[1:1000,c("a","b","cv")], 
+                 RK[1:1000,c("a","b","cv")], 
+                 BH[1:1000,c("a","b","cv")])
+
+  list(HS = HS, RK = RK, BH = BH, res = res, SR = SR, stk = stk, data = data)
+}
+
+
+
+EqSim <- function(fit, Nrun = 200, # number of years to run in total 
+                  wt.years = c(2006, 2011), # years sample weights, sel from
+                  Fscan = seq(0.01, 1, len = 20), # F values to scan over
+                  Blim = max(fit $ data $ ssb) * 0.3) # Blim - deafults to 30% of maximum Rec
+{
+
+  out <- Eqsym(fit, wt.years[1], wt.years[2], Fscan, Nrun, Blim, keep = 100) 
+
+  list(simlist = out, wt.years = wt.years, Blim = Blim)
+}
 
 
 
