@@ -1,6 +1,33 @@
 
+##############################################
+# utility functions
+##############################################
+
+loader <- function(p)
+{
+  if (p==0) cat("0%                       50%                     100%\n")
+ str <- paste0(rep(c("\r[", "=", ">", " ", "]"), c(1, floor(p*50), 1, 50 - floor(p*50), 1)), collapse = "")  
+ cat(str); flush.console()
+ if (floor(p) == 1) cat("\n")
+}
 
 
+
+##############################################
+#Main processing subroutines
+##############################################
+
+HSr <- function(ab, ssb) {
+  log(ifelse(ssb >= ab$b, ab$a * ab$b, ab$a * ssb))
+}
+
+BHr <- function(ab, ssb) {
+  log(ab$a * ssb / (ab$b + ssb))
+}
+
+RKr <- function(ab, ssb) {
+  log(ab$a * ssb * exp(-ab$b * ssb))
+}
 
 
 
@@ -21,9 +48,9 @@ fitModels <- function(stk, delta = 1.3, Nburn = 10000)
 #######################################################
 
   # fit stock recruit relationships using Metropolis hasings MCMC algorithm
-  RK <- BHMH(Nburn + 5000, 5000, data, delta = delta, model = "ricker")
-  BH <- BHMH(Nburn + 5000, 5000, data, delta = delta, model = "bevholt")
-  HS <- BHMH(Nburn + 5000, 5000, data, delta = delta, model = "segreg")
+  RK <- BHMH(Nburn + 5000, Nburn, data, delta = delta, model = "ricker")
+  BH <- BHMH(Nburn + 5000, Nburn, data, delta = delta, model = "bevholt")
+  HS <- BHMH(Nburn + 5000, Nburn, data, delta = delta, model = "segreg")
 
   # transform to johns parameterisations
   BH $ b <- 1/BH $ b
@@ -36,24 +63,48 @@ fitModels <- function(stk, delta = 1.3, Nburn = 10000)
 #########################################################
 # get posterior distribution of estimated recruitment
 #######################################################
-  res <- 
-   list(llHS = HS $ llik, llRK = RK $ llik, llBH = BH $ llik, 
+  llik.mat <- cbind(HS = HS $ llik, RK = RK $ llik, BH = BH $ llik) 
+  fits <- list(
          RHS = t(sapply(1:nrow(HS), function(i) HSr(HS[i,], sort(data $ ssb)))),
          RRK = t(sapply(1:nrow(HS), function(i) RKr(RK[i,], sort(data $ ssb)))),
-         RBH = t(sapply(1:nrow(HS), function(i) BHr(BH[i,], sort(data $ ssb)))),
-         Blim = median(HS $ b), PBlim = hist(HS $ b, 30, plot=FALSE),
-         Stknam = stkname)
+         RBH = t(sapply(1:nrow(HS), function(i) BHr(BH[i,], sort(data $ ssb)))))
 
 
 #########################################################
 # make stock recruit object with correct probabilities of each model
 #######################################################
-  SR <- SRobject(getProb(res, 1000), 
-                 HS[1:1000,c("a","b","cv")], 
-                 RK[1:1000,c("a","b","cv")], 
-                 BH[1:1000,c("a","b","cv")])
+ 
+  # we can remove unlikely models here....  probably not nessisary
 
-  list(HS = HS, RK = RK, BH = BH, res = res, SR = SR, stk = stk, data = data)
+  # construct a markov chain for the model choice
+  M <- rep(NA, nrow(HS))
+  # random start point
+  M[1] <- sample(1:3, 1)
+
+  for (i in 2:length(M))  
+  {
+    # where to go next
+    oldM <- M[i-1]
+    newM <- sample(setdiff(1:3, oldM), 1)
+    u <- runif(1)
+    A <- min(1, exp(llik.mat[i,newM] - llik.mat[i-1,oldM]))
+    if (u <= A) { # Accept the proposed move:
+      M[i] <- newM
+    } else {
+      M[i] <- oldM
+    }
+  }
+
+  #TODO now we should remove burn in... 
+
+  #TODO improve this section!
+  mod <- c("HS","RK","BH")[M]
+  SR <- cbind(mod, HS)
+  SR[mod=="RK",-1] <- RK[mod=="RK",]
+  SR[mod=="BH",-1] <- BH[mod=="BH",]
+  names(SR)[-1] <- c("a","b","sigma","llik")
+
+  list(HS = HS, RK = RK, BH = BH, fits = fits, SR = SR, data = data, stkname = name(stk))
 }
 
 
@@ -71,185 +122,6 @@ EqSim <- function(fit, Nrun = 200, # number of years to run in total
 
 
 
-
-
-
-#############################################
-############################################
-#Main processing subroutines
-##############################################
-
-HSr <- function(ab, ssb) {
-  log(ifelse(ssb >= ab$b, ab$a * ab$b, ab$a * ssb))
-}
-
-BHr <- function(ab, ssb) {
-  log(ab$a * ssb / (ab$b + ssb))
-}
-
-RKr <- function(ab, ssb) {
-  log(ab$a * ssb * exp(-ab$b * ssb))
-}
-
-
-# get posterior model probabilities
-getProb <- function(res, n) {
-
-  llHS = sort(res[[1]])[1:n]
-  llRK = sort(res[[2]])[1:n]
-  llBH = sort(res[[3]])[1:n]
- 
-  # scale likelihoods to avoid numerical overflow
-  sfactor <- mean(c(llHS, llRK, llBH))
-
-  P1t = 1/mean(exp(-llHS + sfactor)) 
-  P3t = 1/mean(exp(-llBH + sfactor)) 
-  P7t = 1/mean(exp(-llRK + sfactor)) 
-
-  # HS RK BH
-  c(P1t,P3t,P7t)/sum(P1t,P3t,P7t)
-}
-
-
-######### plot the fitted model curves
-
-LLplot <- function(res) 
-{
-  P1a = sort(res[[1]])
-  P3a = sort(res[[2]])
-  P7a = sort(res[[3]])
-  plot(P1a, type = "n", 
-       main = paste("LL of Bayes model:", res $ Stknam), 
-       xlab = "model order", ylab = "log likelihood", 
-       ylim = range(P1a,P3a,P7a))
-  lines(P1a, lty = 1, col = 1)
-  lines(P3a, lty = 2, col = 2)
-  lines(P7a, lty = 3, col = 3)
-  legend(x = "bottomright", legend = c("HS","RK","BH"), 
-         lty = c(1,2,3), col = c(1,2,3)) 
-}
-
-LLmodplot <- function (res, data)
-{
-  Rec <- data $ rec[order(data $ ssb)]
-  SSB <- sort(data $ ssb)
-
-  for (mod in 1:3) 
-  { 
-    model <- c("Hockey Stick", "Ricker", "Beverton Holt")[mod]
-    Rsym <- exp(res[[3 + mod]])
-
-    plot(SSB, Rec, xlab = 'SSB', ylab = 'Recruits', 
-         main = paste(res $ Stknam, model), 
-         ylim = c(0, max(Rec)), xlim = c(0, max(SSB)))
-    for (i in sample(1:nrow(res[[4]]), 1000)) {
-      lines(SSB, Rsym[i,],col = paste0(grey(0), "10") )
-    }
-    for (i in c(0.05, 0.25, 0.5, 0.75, 0.95)) {
-      lines(SSB, apply(Rsym, 2, quantile, i), col = 2)
-    }
-    lines(SSB, Rsym[which.max(res[[mod]]),], col=1, lwd=2)
-    points(SSB, Rec, pch = 19, col = "darkblue")  
-  }
-}
-
-
-#### subroutine to creat modeset of 1000 models with set defined in 'mod'.
-SRobject <- function(ps, HS, RK, BH) 
-{
-  mod <- sample(c("HSL","RKL","BHL"), 1000, replace = TRUE, prob = ps)
-  pp <- 1:1000
-  RKLp <- pp[mod=="RKL"]
-  BHLp <- pp[mod=="BHL"]
-
-  ###### without truncation
-  Modset <- cbind(mod, HS)
-  Modset[RKLp,2:4] <- RK[RKLp,1:3]
-  Modset[BHLp,2:4] <- BH[BHLp,1:3]
-  names(Modset)[2:4] <- c("A","B","sigma")
-
-  Modset 
-}
-
-#######################################################
-# plot out recruits without truncation  including ----- Blim estimates
-SRplot <- function (fit) 
-{
-
-  Modset <- fit $ SR
-  data <- fit $ data
-  res <- fit $ res
-
-  SSBO <- data $ ssb
-  RecO <- data $ rec
-
-  StkNam <- res $ Stknam
-  Blim <- res $ Blim
-  PBlim <- res $ PBlim
-
-
-  maint=paste(StkNam,"Sym SR")
-  mn=length(SSBO)
-  SSBs=seq(1:102000)
-  Recs=seq(1:102000)
-  minSSB=min(c(SSBO,max(SSBO)*0.05))
-  maxSSB=max(SSBO)*1.1
-  maxrec=max(RecO*1.5)
-  plot(SSBO,RecO,xlim=c(0,maxSSB),ylim=c(0,maxrec),type="p",pch=19,col=10,xlab="SSB ('000 t)",ylab="Recruits",main=StkNam)
-  for (i in 1:1000) {
-    SSB = runif(1020, minSSB, maxSSB)
-    #SSB = rep(SSBO,40) ## to match SSB values to original
-    if (Modset $ mod[i] =="HSL") {
-      mu=log(Modset$A[i]*Modset$B[i] * (SSB>=Modset$B[i]) + Modset$A[i]*SSB*(SSB<Modset$B[i]))
-      R2=rnorm(1020,0,Modset$sigma[i])
-      Rec=exp(mu+R2[1:1020])
-    } else
-    if (Modset $ mod[i] == "RKL") {
-      mu=log(Modset$A[i]*SSB*exp(-Modset$B[i]*SSB))
-      R2=rnorm(1020,0,Modset$sigma[i])
-      Rec=exp(mu+R2[1:1020])
-    } else
-    if (Modset $ mod[i] == "BHL") {
-      mu <-log(Modset$A[i]*SSB/(Modset$B[i]+SSB))
-      R2=rnorm(1020,0,Modset$sigma[i])
-      Rec=exp(mu+R2[1:1020])
-    }
-    points(SSB[1:mn],Rec[1:mn],type="p",pch=20,col=1,cex=0.0625)
-    SSBs[((i-1)*1020+1):(i*1020)]=SSB
-    Recs[((i-1)*1020+1):(i*1020)]=Rec
-  }
-  points(SSBO,RecO,type="p",pch=19,col=10,cex=1.25)
-
-  step=maxSSB*0.05/1.1
- 
-  up=seq(minSSB,maxSSB,step)
-  lw=seq(minSSB,maxSSB,step)
-  md=seq(minSSB,maxSSB,step)
-  ssb=seq(minSSB+step/2,maxSSB-step/2,step)
-  for (j in 1:(length(up)-1)){
-    up[j]=quantile(Recs[((SSBs>up[j])*(SSBs<up[j+1]))>0],probs=.95,na.rm=TRUE)
-    lw[j]=quantile(Recs[((SSBs>lw[j])&(SSBs<lw[j+1]))>0],probs=.05,na.rm=TRUE)
-    md[j]=quantile(Recs[((SSBs>md[j])&(SSBs<md[j+1]))>0],probs=.5,na.rm=TRUE)
-  }
-  lines(ssb,md[1:(length(up)-1)],col=7,lwd=3)
-  lines(ssb,up[1:(length(up)-1)],col=4,lwd=3)
-  lines(ssb,lw[1:(length(up)-1)],col=4,lwd=3)
-
-  # plot Blim
-  #lines(PBlim$mids,0.1*maxrec/max(PBlim$counts)*PBlim$counts,col=5,lwd=2)
-  lines(c(Blim,Blim),c(0,maxrec),col=5,lwd=2)
-}
-
-
-
-
-loader <- function(p)
-{
-  if (p==0) cat("0%                       50%                     100%\n")
- str <- paste0(rep(c("\r[", "=", ">", " ", "]"), c(1, floor(p*50), 1, 50 - floor(p*50), 1)), collapse = "")  
- cat(str); flush.console()
- if (floor(p) == 1) cat("\n")
-}
 
 ##### simulates the equilibrium results for a population
 Eqsym <- function (fit, btyr1, btyr2, 
@@ -395,6 +267,109 @@ Eqsym <- function (fit, btyr1, btyr2,
 
 
 
+
+############################################
+# plotting routines
+##############################################
+
+LLplot <- function(fit) 
+{
+  lliks <- sapply(fit[1:3], function(x) sort(x $ llik))
+
+  plot(0, 0, type = "n", 
+       main = paste("LL of Bayes model:", fit $ stknam), 
+       xlab = "model order", ylab = "log likelihood", 
+       ylim = range(lliks), xlim = c(1, nrow(lliks)))
+  for (i in 1:ncol(lliks)) 
+  {
+    lines(lliks[,i], lty = i, col = i)
+  }
+  lines(sort(fit $ SR $ llik), lwd = 2)
+  legend(x = "bottomright", legend = c("HS","RK","BH","Avg"), 
+         lty = c(1:ncol(lliks),1), col = c(1:ncol(lliks),1), lwd = c(1,1,1,2)) 
+}
+
+
+LLmodplot <- function(fit)
+{
+  rec <- fit $ data $ rec[order(fit $ data $ ssb)]
+  ssb <- sort(fit $ data $ ssb)
+
+  for (mod in 1:3) 
+  { 
+    model <- c("Hockey Stick", "Ricker", "Beverton Holt")[mod]
+    Rsym <- exp(fit $ fits[[mod]])
+
+    plot(ssb, rec, xlab = 'SSB', ylab = 'Recruits', 
+         main = paste(fit $ stknam, model), 
+         ylim = c(0, max(rec)), xlim = c(0, max(ssb)), type = "n")
+    for (i in sample(1:nrow(Rsym), 1000)) {
+      lines(ssb, Rsym[i,], col = paste0(grey(0), "10") )
+    }
+    for (i in c(0.05, 0.25, 0.5, 0.75, 0.95)) {
+      lines(ssb, apply(Rsym, 2, quantile, i), col = 2)
+    }
+    #TODO lines(ssb, Rsym[which.max(res[[mod]]),], col=1, lwd=2)
+    points(ssb, rec, pch = 19, col = "darkblue")  
+  }
+}
+
+
+# plot simulated recruits including Blim estimates
+SRplot <- function (fit) 
+{
+  modset <- fit $ SR
+  data <- fit $ data
+
+  ssb <- data $ ssb
+  rec <- data $ rec
+
+  #TODO Blim <- res $ Blim
+  #TODO PBlim <- res $ PBlim
+
+  mn <- length(ssb)
+  minSSB <- min(ssb, max(ssb)*0.05)
+  maxSSB <- max(ssb)*1.1
+  maxrec <- max(rec*1.5)
+
+  plot(ssb, rec, xlim = c(0, maxSSB), ylim = c(0, maxrec), type = "n", 
+       xlab = "SSB ('000 t)", ylab="Recruits", main = fit $ stknam)
+
+  out <-
+  do.call(rbind, lapply(1:1000, 
+    function(i)
+    {
+      fssb <- runif(1000, minSSB, maxSSB)
+      FUN <-  get(paste0(modset $ mod[i], "r"))
+      frec <- exp( FUN(modset[i,], fssb) + rnorm(1000, sd = modset $ sigma[i]) )
+      points(fssb, frec, pch = 20, col = paste0(grey(0), "10"), cex = 0.0625)
+
+      data.frame(ssb = fssb, rec = frec)
+    }))
+  out $ grp <- with(out, floor(10 * (ssb - min(ssb)) / (max(ssb) - min(ssb) + 0.001)))
+  out $ mid.grp <- with(out, (grp + 0.5) / 10 * (max(ssb) - min(ssb)) + min(ssb))
+
+  #TODO use 
+  summ <- with(out, 
+    t(simplify2array( tapply(rec, grp, quantile, c(0.5, .025, .975)) )))
+
+  mid.grp <- sort(unique(out $ mid.grp))
+
+  lines(mid.grp, summ[,1], col = 7, lwd = 3)
+  lines(mid.grp, summ[,2], col = 4, lwd = 3)
+  lines(mid.grp, summ[,3], col = 4, lwd = 3)
+
+  points(ssb, rec, pch = 19, col = 10, cex = 1.25)
+
+
+  #TODO plot Blim
+  #lines(PBlim$mids,0.1*maxrec/max(PBlim$counts)*PBlim$counts,col=5,lwd=2)
+  #lines(c(Blim,Blim),c(0,maxrec),col=5,lwd=2)
+}
+
+
+
+
 ######## Creates equilibrium plots
 
 Eqplot <- function (symlist, stk, Blim, Bpa = 1.4 * Blim)
@@ -515,7 +490,7 @@ Eqplot <- function (symlist, stk, Blim, Bpa = 1.4 * Blim)
 }
 
 
-pssb <- function (symlistf,Blim,Bpa,stknam)   {
+pssb <- function (symlistf, Blim, Bpa, stknam)   {
   maintfn=paste(stknam,'ssb sum')
   maxc=max(symlistf[[7]])
   intc=which(symlistf[[7]]>0.95*maxc)
