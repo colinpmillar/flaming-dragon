@@ -283,9 +283,9 @@ BHMH <- function(nt, nburn, data, delta, model = c("bevholt","ricker","segreg"))
 
     nparam <- length(param)
 
-# param[1] = BH a
-# param[2] = BH b
-# param[3] = BH cv (sd on log scale...)
+# param[1] = a
+# param[2] = b
+# param[3] = cv (sd on log scale...)
 
 # sample is an array in which we put the sample from the posterior distribution.
 
@@ -294,7 +294,7 @@ BHMH <- function(nt, nburn, data, delta, model = c("bevholt","ricker","segreg"))
     names(sample) <- c("a", "b", "cv", "llik")
     accept <- rep(0, nparam)
 
-# Calculate log(likelihood) for initial state using a separate function "likhood":
+# Calculate log(likelihood) for initial state using a separate function "calcllikhood":
 
     llikhood <- calcllikhood(ni, data, param, model)
 
