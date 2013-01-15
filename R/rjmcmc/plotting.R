@@ -28,21 +28,22 @@ LLmodplot <- function(fit)
 
   for (mod in 1:3) 
   { 
-    model <- c("Hockey Stick", "Ricker", "Beverton Holt")[mod]
+    model <- c("Hockey Stick fit", "Ricker fit", "Beverton Holt fit")[mod]
     Rsym <- exp(fit $ fits[[mod]])
 
     plot(ssb, rec, xlab = 'SSB', ylab = 'Recruits', 
-         main = paste(fit $ stknam, model), 
+         main = paste(c("a)","b)","c)")[mod], fit $ stknam, model), 
          ylim = c(0, max(rec)), xlim = c(0, max(ssb)), type = "n")
     for (i in sample(1:nrow(Rsym), 1000)) {
       lines(ssb, Rsym[i,], col = paste0(grey(0), "10") )
     }
-    for (i in c(0.05, 0.25, 0.5, 0.75, 0.95)) {
-      lines(ssb, apply(Rsym, 2, quantile, i), col = 2)
+    for (i in c(0.05, 0.95)) {
+      lines(ssb, apply(Rsym, 2, quantile, i), col = 4, lwd = 3)
     }
+    lines(ssb, apply(Rsym, 2, quantile, 0.5), col = 7, lwd = 3)
     #TODO lines(ssb, Rsym[which.max(res[[mod]]),], col=1, lwd=2)
-    lines(fit $ data $ ssb, fit $ data $ rec, col = "darkblue")
-    points(ssb, rec, pch = 19, col = "darkblue")  
+    lines(fit $ data $ ssb, fit $ data $ rec, col = "red")
+    points(ssb, rec, pch = 19, col = "red")  
   }
 }
 
@@ -65,16 +66,16 @@ SRplot <- function (fit)
   maxrec <- max(rec*1.5)
 
   plot(ssb, rec, xlim = c(0, maxSSB), ylim = c(0, maxrec), type = "n", 
-       xlab = "SSB ('000 t)", ylab="Recruits", main = fit $ stknam)
+       xlab = "SSB ('000 t)", ylab="Recruits", main = paste("Predictive distribution for", fit $ stknam))
 
   out <-
   do.call(rbind, lapply(1:1000, 
     function(i)
     {
-      fssb <- runif(1000, minSSB, maxSSB)
+      fssb <- runif(500, minSSB, maxSSB)
       FUN <-  get(paste0(modset $ mod[i], "r"))
-      frec <- exp( FUN(modset[i,], fssb) + rnorm(1000, sd = modset $ sigma[i]) )
-      points(fssb, frec, pch = 20, col = paste0(grey(0), "10"), cex = 0.0625)
+      frec <- exp( FUN(modset[i,], fssb) + rnorm(500, sd = modset $ sigma[i]) )
+      points(fssb, frec, pch = 20, col = paste0(grey(0), "05"), cex = 0.0625)
 
       data.frame(ssb = fssb, rec = frec)
     }))
@@ -83,7 +84,7 @@ SRplot <- function (fit)
 
   #TODO use 
   summ <- with(out, 
-    t(simplify2array( tapply(rec, grp, quantile, c(0.5, .025, .975)) )))
+    t(simplify2array( tapply(rec, grp, quantile, c(0.5, .05, .95)) )))
 
   mid.grp <- sort(unique(out $ mid.grp))
 
@@ -118,36 +119,18 @@ Eqplot <- function (sim, stk, fit, Blim, Bpa = 1.4 * Blim)
   catsam <- apply(sim $ catsa, c(1,3), mean)
   maxpf <- apply(catsam, 2, which.max)
   fmsy <- Fscan[maxpf]
-  v <- hist(fmsy, breaks = c(Fscan-Fscan[1]/2, max(Fscan) + Fscan[1]/2), plot = FALSE)
+
+  msym <- mean(fmsy)
+  vcum <- median(fmsy)
+  fmsy.dens <- density(fmsy)
+  vmode <- fmsy.dens $ x[which.max(fmsy.dens $ y)]
 
   pssb1 <- apply(sim $ ssbsa > Blim, 1, mean)
   pssb2 <- apply(sim $ ssbsa > Bpa, 1, mean)
 
   pp1 <- max(which(pssb1>.95))
   grad <- diff(Fscan[pp1 + 0:1]) / diff(pssb1[pp1 + 0:1])
-  flim <- Fscan[pp1] + grad * (0.95 - pssb1[pp1])
-
-  if (any(cumsum(v$counts) > Nmod / 2 - 1)) 
-  {
-    upp <- min(cumsum(v$counts)[ cumsum(v$counts) > Nmod / 2 - 1])
-    uppp <- which(cumsum(v$counts)==upp)
-  } else upp <- NA
-
-
-  if (any(cumsum(v$counts) < Nmod / 2 - 1))
-  {
-    dwn <- max(cumsum(v$counts)[ cumsum(v$counts) < Nmod / 2 - 1])
-    dwnp <- which(cumsum(v$counts)==dwn)
-  } else dwn <- NA
-
-
-  if (!is.na(upp) & !is.na(dwn)) 
-  {
-    vcum <- (Nyrs/2-dwn)*(Fscan[uppp]-Fscan[dwnp])/(upp-dwn)+Fscan[dwnp]   # 50%  on dist msy
-  } else vcum <- NA
-
-  vmode <- which.max(v$counts)                                                    # mode of dist msy
-  msym <- sum(Fscan * v$counts) / sum(v$counts)                                   # mean of dist msy
+  flim <- Fscan[pp1] + grad * (0.95 - pssb1[pp1])  # linear interpolation i think..
 
 
   maint <- name(stk)  
@@ -165,8 +148,12 @@ Eqplot <- function (sim, stk, fit, Blim, Bpa = 1.4 * Blim)
 
   NF <- length(Fscan)
   pp1 <- max(which(pssb1>.50))
-  grad <- (Fscan[pp1+1]-Fscan[pp1])/(pssb3[pp1+1]-pssb3[pp1])
-  flim5 <- Fscan[pp1]+grad*(0.5-pssb3[pp1])
+  grad <- diff(Fscan[pp1 + 0:1]) / diff(pssb1[pp1 + 0:1])
+  flim50 <- Fscan[pp1]+grad*(0.5-pssb1[pp1]) # linear interpolation i think..
+
+  pp1 <- max(which(pssb1>.90))
+  grad <- diff(Fscan[pp1 + 0:1]) / diff(pssb1[pp1 + 0:1])
+  flim10 <- Fscan[pp1]+grad*(0.9-pssb1[pp1]) # linear interpolation i think..
 
   maxcatm <- which.max(catm)
 
@@ -238,21 +225,29 @@ Eqplot <- function (sim, stk, fit, Blim, Bpa = 1.4 * Blim)
         cex.lab = 0.75, line = 1.2, cex.main = 0.75)
   mtext(text = "d) Prob MSY and Risk to SSB", cex = 0.75, side = 3, line = 0.5)
   lines(Fscan, 1 - pssb2, lty = 4)
-  lines(c(0,xmax), c(0.05,0.05))
-  lines(c(0,xmax), c(0.1,0.1))
-  text(x = 0.1, y = 0.075, "5%", cex = 0.75)
+  
+  
   text(x = max(Fscan[pssb2 > 0.5]) - .05, y = 0.5, "SSB<Bpa", cex = 0.75)
   text(x = max(Fscan[pssb1 > 0.7]) + .1, y = 0.3, "SSB<Blim", cex = 0.75)
+
   lines(c(flim,flim), c(0,1), col = 3)
-  lines(v$mids, v$counts / Nmod, col = 4)
-  text(x = 0.2, y = 0.15, "Prob of Fmsy", cex = 0.75)
-  lines(rep(vcum,2), c(0,1), lty = 1, col = 5)
+  lines(c(0,flim), c(0.05,0.05), lty = 2, col = 3)
+  text(x = 0.1, y = 0.075, "5%", cex = 0.75, col = 3)
+  lines(c(flim10,flim10), c(0,1), col = "darkgreen")
+  lines(c(0,flim10), c(0.1,0.1), lty = 2, col = "darkgreen")
+  text(x = 0.05, y = 0.125, "10%", cex = 0.75, col = "darkgreen")
+  lines(fmsy.dens $ x, cumsum(fmsy.dens $ y * diff(fmsy.dens $ x)[1]), col = 4)
+#  lines(c(0, vcum), c(0.5, 0.5), lty = 2, col = 4)
+  text(x = 0.9, y = 0.8, "Prob of Fmsy", cex = 0.75, col = 4)
+  lines(rep(vcum,2), c(0,1), lty = 1, col = 4)
+
+  lines(c(Fscan[maxcatm],Fscan[maxcatm]), c(0,1), col = 5)
 
   FCrash5  <- Fscan[ which(cats[2, which.max(cats[2,]):NF] < 0.5*max(cats[2,]) )[1] ]
   FCrash50 <- Fscan[ which(cats[4, which.max(cats[4,]):NF] < 0.5*max(cats[4,]) )[1] ]
 
-  out <- c(Blim, Bpa, flim, flim5, round(vcum*100)/100, Fscan[maxcatm], FCrash5, FCrash50)
-  names(out) <- c("Blim","Bpa","Flim","Flim5","MSY:median","Maxmeanland","FCrash5","FCrash50")
+  out <- c(Blim, Bpa, flim, flim10, flim50, vcum, Fscan[maxcatm], FCrash5, FCrash50)
+  names(out) <- c("Blim","Bpa","Flim","Flim10","Flim50","MSY:median","Maxmeanland","FCrash5","FCrash50")
 
   out
 }
