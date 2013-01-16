@@ -24,6 +24,7 @@ doOne <- function(runid)
 # SGMED best assessment
 if (runid == "Sardine SGMED") {
   stk <- SarEWG.GFCM
+  range(stk)[c("minfbar","maxfbar")] <- c(1,4)
   data <- data.frame(ssb  = c(ssb(stk))[-dim(stock.n(stk))[2]],
                      rec  = c(rec(stk))[-1],
                      year = dimnames(catch(stk)) $ year[-1])
@@ -32,48 +33,64 @@ if (runid == "Sardine SGMED") {
 # SGMED best assessment with 1984 recruitment removed
 if (runid == "Sardine SGMED outlier removed") {
 
-stk <- SarEWG.GFCM
-data <- data.frame(ssb  = c(ssb(stk))[-dim(stock.n(stk))[2]],
-                   rec  = c(rec(stk))[-1],
-                   year = dimnames(catch(stk)) $ year[-1])
+  stk <- SarEWG.GFCM
+  range(stk)[c("minfbar","maxfbar")] <- c(1,4)
+  data <- data.frame(ssb  = c(ssb(stk))[-dim(stock.n(stk))[2]],
+                     rec  = c(rec(stk))[-1],
+                     year = dimnames(catch(stk)) $ year[-1])
 
-data <- data[-9,]
+  data <- data[-9,]
 }
 
 # GFCM best assessment
 if (runid == "Sardine GFCM") {
 
-stk <- SarGFCM
-data <- data.frame(ssb  = c(ssb(stk))[-dim(stock.n(stk))[2]],
-                   rec  = c(rec(stk))[-1],
-                   year = dimnames(catch(stk)) $ year[-1])
+  stk <- SarGFCM
+  range(stk)[c("minfbar","maxfbar")] <- c(1,4)
+  data <- data.frame(ssb  = c(ssb(stk))[-dim(stock.n(stk))[2]],
+                     rec  = c(rec(stk))[-1],
+                     year = dimnames(catch(stk)) $ year[-1])
 }
 
 # Full ICA assessment
 if (runid == "Sardine Long ICA") {
 
-stk <- SarEWG
-data <- data.frame(ssb  = c(ssb(stk))[-dim(stock.n(stk))[2]],
-                   rec  = c(rec(stk))[-1],
-                   year = dimnames(catch(stk)) $ year[-1])
+  stk <- SarEWG
+  range(stk)[c("minfbar","maxfbar")] <- c(1,4)
+  data <- data.frame(ssb  = c(ssb(stk))[-dim(stock.n(stk))[2]],
+                     rec  = c(rec(stk))[-1],
+                     year = dimnames(catch(stk)) $ year[-1])
 }
 
+# SGMED anchovy assessment
 if (runid == "Anchovy SGMED") {
   stk <- AncEWG
+  range(stk)[c("minfbar","maxfbar")] <- c(1,3)
   data <- data.frame(ssb  = c(ssb(stk)),
-                     rec  = c(rec(stk)),
+                     rec  = c(stock.n(stk)["0"]),
                      year = dimnames(catch(stk)) $ year)
 }
 
+# SGMED assessment with
 if (runid == "Anchovy SGMED outlier removed") {
 
-stk <- AncEWG
-data <- data.frame(ssb  = c(ssb(stk)),
-                   rec  = c(rec(stk)),
-                   year = dimnames(catch(stk)) $ year)
+  stk <- AncEWG
+  range(stk)[c("minfbar","maxfbar")] <- c(1,3)
+  data <- data.frame(ssb  = c(ssb(stk)),
+                     rec  = c(stock.n(stk)["0"]),
+                     year = dimnames(catch(stk)) $ year)
 
-data <- subset(data, ssb < 550000)
+  data <- subset(data, ssb < 550000)
 }
+
+if (runid == "Anchovy SGMED age 0 removed") {
+  stk <- AncEWG[paste(1:5),]
+  range(stk)[c("minfbar","maxfbar")] <- c(1,3)
+  data <- data.frame(ssb  = c(ssb(stk))[-dim(stock.n(stk))[2]],
+                     rec  = c(stock.n(stk)["1"])[-1],
+                     year = dimnames(catch(stk)) $ year[-1])
+}
+
 
 # save data
 #----------------------------
@@ -153,8 +170,9 @@ write.table(as.data.frame(t(c(round(rfpts[1:2]), round(rfpts, 2)[-c(1:2)]))), fi
 # choose a scenario
 
 runids <- c("Sardine SGMED", "Sardine SGMED outlier removed", "Sardine GFCM", "Sardine Long ICA", 
-            "Anchovy SGMED", "Anchovy SGMED outlier removed")
+            "Anchovy SGMED", "Anchovy SGMED outlier removed", "Anchovy SGMED age 0 removed")
 
+library(multicore)
 tmp <- mclapply(runids, doOne)
 
 
