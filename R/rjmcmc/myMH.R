@@ -247,12 +247,27 @@ BHMH <- function(nt, nburn, data, delta, model = c("bevholt","ricker","segreg"))
 
     if (model == "bevholt") {
 
-      init <- glm(rec ~ I(1/ssb), family = Gamma(inverse), data = data)
-      param. <- coef(init)
-      param <- rep(NA,3)
-      param[1] <- 1/param.[2]
-      param[2] <- param.[1] * param[1]
-      param[3] <- sqrt(gamma.dispersion(init))
+      # glm start values too ropey - can´t force positive parameters
+
+      x <- data $ ssb
+      y <- data $ rec
+      init.Rmax <- median(y)
+      init.S50 <- median(x)
+      init.alpha <- init.Rmax
+      init.beta <- init.S50
+      ls.slope <- sum(x * y) / sum(x * x) 
+      Rmax <- max(y)
+      Bmax <- max(x)
+      Pmax <- 2 * max(y / x)
+
+      data $ logrec <- log(data $ rec)
+      data $ logssb <- log(data $ ssb)      
+      BH.fit <- nls(logrec ~ log(alpha) + logssb - log(beta + ssb), data = data,
+                    start = list(alpha = init.alpha, beta = init.beta),
+                    lower = c(0.1,1), upper = c(Rmax,Bmax),
+                    algorithm = "port")
+
+      param <- c(coef(BH.fit), summary(BH.fit) $ sigma)
 
     } else
     if (model == "ricker") {

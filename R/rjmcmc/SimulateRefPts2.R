@@ -42,10 +42,11 @@ fitModels <- function(data, runid, delta = 1.3, Nburn = 10000, use = NULL)
 # Fit models
 #--------------------------------------------------------
 
+  delta <- rep(delta, length = 3)
   # fit stock recruit relationships using Metropolis hasings MCMC algorithm
-  RK <- BHMH(Nburn + 5000, Nburn, data, delta = delta, model = "ricker")
-  BH <- BHMH(Nburn + 5000, Nburn, data, delta = delta, model = "bevholt")
-  HS <- BHMH(Nburn + 5000, Nburn, data, delta = delta, model = "segreg")
+  RK <- BHMH(Nburn + 5000, Nburn, data, delta = delta[1], model = "ricker")
+  BH <- BHMH(Nburn + 5000, Nburn, data, delta = delta[2], model = "bevholt")
+  HS <- BHMH(Nburn + 5000, Nburn, data, delta = delta[3], model = "segreg")
 
   # transform to johns parameterisations
   BH $ b <- 1/BH $ b
@@ -107,7 +108,7 @@ fitModels <- function(data, runid, delta = 1.3, Nburn = 10000, use = NULL)
 ##### simulates the equilibrium results for a population
 EqSim <- function(fit, stk, 
                   Nrun = 200, # number of years to run in total
-                  wt.years = c(2006, 2011), # years sample weights, sel from
+                  wt.years = c(2007, 2011), # years sample weights, sel from
                   Fscan = seq(0, 1, len = 20)) # F values to scan over
 {
 
@@ -126,7 +127,7 @@ EqSim <- function(fit, stk,
   weca <- catch.wt(stk.win)[drop=TRUE]
   sel <- harvest(stk.win)[drop=TRUE]
   Fbar <- fbar(stk.win)[drop=TRUE]
-  sel <- sweep(sel, 1, Fbar, "/")
+  sel <- sweep(sel, 2, Fbar, "/")
 
   if (flgsel == 0) { # take means of selection
     sel[] <- apply(sel, 1, mean)
@@ -148,8 +149,8 @@ EqSim <- function(fit, stk,
 
   ssby <- array(0, c(Nrun,Nmod))
   Ny <- Fy <- WSy <- WCy <- Cy <- Wy <- array(0, c(ages, Nrun, Nmod))
-  rsam <- array(sample(1:length(Mat), Nrun * Nmod, TRUE), c(Nrun, Nmod)) 
-  Wy[] <- c(weca[, rsam])
+  rsam <- array(sample(1:ncol(weca), Nrun * Nmod, TRUE), c(Nrun, Nmod)) 
+  Wy[] <- c(weca[, c(rsam)])
 
   # initial recruitment
   R <- mean( data $ rec)

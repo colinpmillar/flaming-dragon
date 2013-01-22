@@ -110,7 +110,7 @@ save(fit, file = paste(odir, "fit.rData", sep = "/"))
 
 # run the simulations
 #----------------------------
-sim <- EqSim(fit, SarEWG, Fscan = seq(0, 1, length = 40))
+sim <- EqSim(fit, stk, Fscan = seq(0, 2, length = 40))
 save(sim, file = paste(odir, "sim.rData", sep="/"))
 
 
@@ -173,6 +173,8 @@ runids <- c("Sardine SGMED", "Sardine SGMED outlier removed", "Sardine GFCM", "S
             "Anchovy SGMED", "Anchovy SGMED outlier removed", "Anchovy SGMED age 0 removed")
 
 library(multicore)
+tmp <- mclapply(runids, doOne)
+
 tmp <- mclapply(runids, doOne)
 
 
