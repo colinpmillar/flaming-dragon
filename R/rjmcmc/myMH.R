@@ -38,7 +38,7 @@ llik <- function(param, data, model, logpar = FALSE)
   FUN <- match.fun(model)
   if (logpar) {
     pred <- FUN(list(a = exp(param[1]), b = exp(param[2])), data $ ssb)
-    sum( dnorm(log(data $ rec), pred, exp(param[3]), log = TRUE) )
+    sum( dnorm(log(data $ rec), pred, exp(param[3]), log = TRUE) ) - sum(param) # add on prior so it is uniform
   } else {
     pred <- FUN(list(a = param[1], b = param[2]), data $ ssb)
     sum( dnorm(log(data $ rec), pred, param[3], log = TRUE) )
@@ -73,14 +73,12 @@ updateparam <- function(param, data, llikhood, delta, model)
 # Keep a record of the current parameter value being updated
 
   oldparam <- param
-  for (i in seq(param)) {
-    param[i] <- param[i] * scaleProposal(delta)  # multiplicative
-  }  
+  param <- param * replicate(length(param), scaleProposal(delta))  # multiplicative
   newllikhood <- llik(param, data, model)
 
 # MH step:
 
-  if (runif(1) <= exp(newllikhood - llikhood)) { # no need for min(0, ...) 
+  if (runif(1) <= exp(newllikhood - llikhood)) { # no need for min(1, ...) 
 # Accept the proposed move:
     llikhood <- newllikhood
   } else {
@@ -102,10 +100,6 @@ MH <- function(nt, nburn, data, model, delta = 1.3) {
 
   opt <- optim(rep(0, 3), llik, data = sdata, model = model, logpar = TRUE, control = list(fnscale = -1)) 
   param <- exp(opt $ par)
-
-# param[1] = a
-# param[2] = b
-# param[3] = cv (sd on log scale...)
 
 # sample is an array in which we put the sample from the posterior distribution.
 
@@ -141,5 +135,158 @@ MH <- function(nt, nburn, data, model, delta = 1.3) {
 
   subsample
 }
+
+
+
+
+
+
+MCMC.log <- function(nt, nburn, data, models, delta = 1.3) {
+
+## TODO
+# assess posterior probability of model and remove if it drops below some level as the samples from this model will be very low.
+
+# scale data
+  sdata <- data
+  sdata $ ssb <- sdata $ ssb / exp(mean(log(sdata $ ssb)))
+  sdata $ rec <- sdata $ rec / exp(mean(log(sdata $ rec)))
+
+# Set initial parameter values - use maximum likelihood estimates:
+
+  opt <- lapply(models, function(x) optim(rep(0, 3), llik, data = sdata, model = x, logpar = TRUE, control = list(fnscale = -1), hessian = TRUE)) 
+  param <- c(sapply(opt, "[[", "par"))
+  Sigma <- cov2cor(solve(bdiag(lapply(opt, function(x) -1 * x $ hessian)))) * (2.38 / sqrt(length(param)))^2 * delta^2
+
+# select first model using max llik of fits
+
+  mod <- which.max(sapply(opt, "[[", "value"))
+
+# sample is an array in which we put the sample from the posterior distribution.
+
+  nmod <- length(models)
+  sample <- array(0, dim=c(nt, 5))
+  colnames(sample) <- c("model", "llik", "a", "b", "cv")
+
+# Calculate log(likelihood) for initial state using a separate function "llik":
+
+  llikhood <- llik(param[1:3 + (mod - 1)*3], sdata, models[mod], logpar = TRUE)
+
+# MCMC:
+
+  for (mc in 1:nt) 
+  {
+
+# step one: Gibbs sample the model given parameters 
+
+    cond.lpost <- sapply(1:nmod, function(i) llik(param[1:3 + (i - 1)*3], sdata, models[i], logpar = TRUE))
+    prob <- exp(cond.lpost) / sum(exp(cond.lpost))
+    mod <- sample.int(nmod, 1, prob = prob)  
+
+# step two: use a correlated random walk (a symmetric proposal)
+
+    oldparam <- param
+    param <- param + mvrnorm(1, rep(0, length(param)), Sigma)  # multiplicative
+    newllikhood <- llik(param, sdata, models[mod], logpar = TRUE)
+
+# MH step:
+
+    if (runif(1) <= exp(newllikhood - llikhood)) { # no need for min(1, ...) 
+# Accept the proposed move:
+      llikhood <- newllikhood
+    } else {
+      param <- oldparam
+    }
+
+# Record the set of parameter values:
+    sample[mc,] <- c(mod, llikhood, param[1:3 + (mod - 1)*3])
+  }
+
+# Calculate the mean and standard deviation of the parameters
+# following burn-in:
+  subsample <- sample[(nburn+1):nt,]
+
+# a crudish approximation to acceptance rate
+  cat("acceptance rate:", mean(diff(subsample[,1]) != 0), ", try for 0.40\n")
+
+  data.frame(subsample)
+}
+
+
+
+
+
+
+
+
+MCMC.Gibbs.fail <- function(nt, nburn, data, models, delta = 1.3) {
+
+## TODO
+# assess posterior probability of model and remove if it drops below some level as the samples from this model will be very low.
+
+# scale data
+  sdata <- data
+  sdata $ ssb <- sdata $ ssb / exp(mean(log(sdata $ ssb)))
+  sdata $ rec <- sdata $ rec / exp(mean(log(sdata $ rec)))
+
+# Set initial parameter values - use maximum likelihood estimates:
+
+  opt <- lapply(models, function(x) optim(rep(0, 3), llik, data = sdata, model = x, logpar = TRUE, control = list(fnscale = -1), hessian = TRUE)) 
+  param <- c(exp(sapply(opt, "[[", "par")))
+  Sigma <- solve(bdiag(lapply(opt, function(x) x $ hessian))) #* something to do with the dimension ... 
+
+# select first model using max like of fits
+
+  mod <- which.max(sapply(opt, "[[", "value"))
+
+# sample is an array in which we put the sample from the posterior distribution.
+
+  nmod <- length(models)
+  sample <- array(0, dim=c(nt, 5))
+  colnames(sample) <- c("model", "llik", "a", "b", "cv")
+
+# Calculate log(likelihood) for initial state using a separate function "llik":
+
+  llikhood <- llik(param[1:3 + (mod - 1)*3], sdata, models[mod])
+
+# MCMC:
+
+  for (t in 1:nt) 
+  {
+
+# step one: Gibbs sample the model given parameters 
+
+    cond.lpost <- sapply(1:nmod, function(i) llik(param[1:3 + (i - 1)*3], sdata, models[i]))
+    prob <- exp(cond.lpost) / sum(exp(cond.lpost))
+    mod <- sample.int(nmod, 1, prob = prob)  
+
+# step two: sample the parameters given the model - use a better proposal... how about a correlated random walk?
+
+    output <- updateparam2(param, sdata, llikhood, delta, models[mod], Sigma)
+
+# Set parameter values and log(likelihood) value of current state to be the input to
+# the next MH step:
+    param <- output[-1]
+    llikhood <- output[1]
+
+# Record the set of parameter values:
+    sample[t,] <- c(mod, llikhood, param[1:3 + (mod - 1)*3])
+  }
+
+# Calculate the mean and standard deviation of the parameters
+# following burn-in:
+  subsample <- sample[(nburn+1):nt,]
+
+# a crudish approximation to acceptance rate
+  cat("acceptance rate:", round(mean(diff(subsample[,1]) != 0), 3), ", try for 0.40\n")
+
+
+  data.frame(subsample)
+}
+
+
+
+
+
+
 
 
