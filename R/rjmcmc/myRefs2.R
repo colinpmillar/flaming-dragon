@@ -8,7 +8,7 @@
 # stock data are loaded as FLR objects
 # years used to define selection, weights etc are used defined
 
-library(colorout)
+
 library(MASS)
 library(FLCore)
 source("SimulateRefPts2.R")
@@ -17,6 +17,21 @@ source("myMH.R")
 
 ############### Read in stock assess information prepared as FLR stock objects.
 load("ewg1219.RData")
+
+  stk <- SarEWG.GFCM
+  range(stk)[c("minfbar","maxfbar")] <- c(1,4)
+  data <- data.frame(ssb  = c(ssb(stk))[-dim(stock.n(stk))[2]],
+                     rec  = c(rec(stk))[-1],
+                     year = dimnames(catch(stk)) $ year[-1])
+
+  Nburn <- 10000
+
+  RK <- MH(Nburn + 5000, Nburn, data, delta = 1.3, model = ricker)
+  BH <- MH(Nburn + 5000, Nburn, data, delta = 1.3, model = bevholt)
+  HS <- MH(Nburn + 5000, Nburn, data, delta = 1.3, model = segreg)
+
+
+
 
 
 doOne <- function(runid)

@@ -11,22 +11,6 @@ loader <- function(p)
  if (floor(p) == 1) cat("\n")
 }
 
-##############################################
-# stock recruit formulations
-##############################################
-
-HSr <- function(ab, ssb) {
-  log(ifelse(ssb >= ab$b, ab$a * ab$b, ab$a * ssb))
-}
-
-BHr <- function(ab, ssb) {
-  log(ab$a * ssb / (ab$b + ssb))
-}
-
-RKr <- function(ab, ssb) {
-  log(ab$a * ssb * exp(-ab$b * ssb))
-}
-
 
 ##############################################
 # Main processing subroutines: 
@@ -35,26 +19,26 @@ RKr <- function(ab, ssb) {
 ##############################################
 
 
-fitModels <- function(data, runid, delta = 1.3, Nburn = 10000, use = NULL)
+fitModels <- function(data, runid, delta = 1.3, Nburn = 10000, models = c("ricker","segreg","bevholt"))
 {
 
 #--------------------------------------------------------
 # Fit models
 #--------------------------------------------------------
 
-  delta <- rep(delta, length = 3)
-  # fit stock recruit relationships using Metropolis hasings MCMC algorithm
-  RK <- BHMH(Nburn + 5000, Nburn, data, delta = delta[1], model = "ricker")
-  BH <- BHMH(Nburn + 5000, Nburn, data, delta = delta[2], model = "bevholt")
-  HS <- BHMH(Nburn + 5000, Nburn, data, delta = delta[3], model = "segreg")
+  # fit individual stock recruit relationships using Metropolis hasings MCMC algorithm
+  fits <- lapply(models, function(x) MH(Nburn + 5000, Nburn, data, delta = delta[1], model = x))
+  names(fits = models)
 
-  # transform to johns parameterisations
-  BH $ b <- 1/BH $ b
-  BH $ a <- BH $ a * BH $ b
+#--------------------------------------------------------
+# get posterior summaries on log scale
+#--------------------------------------------------------
 
-  a <- HS $ b
-  HS $ b <- 1/(HS $ a * HS $ b)
-  HS $ a <- a
+  lfits <- lapply(fits, function(x) {x[-1] <- lapply(x[-1], log); x})
+
+  mu <- lapply(fits, function(x) colMeans(x[-1]))
+  Sig <- lapply(fits, function(x) var(x[-1]))
+
 
 #--------------------------------------------------------
 # get posterior distribution of estimated recruitment
